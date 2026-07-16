@@ -1,6 +1,6 @@
 -- EMON installer.
 --
---   wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.1/setup.lua && setup
+--   wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.2/setup.lua && setup
 --
 -- Note the `&&`: without it, a failed wget leaves the PREVIOUS setup.lua in
 -- place and `setup` cheerfully runs that instead, installing whatever ref that
@@ -29,21 +29,19 @@ local shell = require("shell")
 
 -- Override with `setup --repo=user/repo --branch=name` when installing a fork.
 --
--- The default is a TAG, not a branch, and that matters. jsDelivr caches a
--- branch ref per file for hours, so `@main` can hand back a different vintage
--- for each file: an install then ends up with some files current and some
--- stale, which fails as "attempt to call a nil value" on a function that
--- plainly exists in the repo. A tag is immutable, so every file is guaranteed
--- to come from the same commit.
+-- The default is a TAG, not a branch. jsDelivr caches a branch ref for hours
+-- and does so per file, so `@main` can serve a different commit for each file
+-- and every request still reports success. A tag is immutable, so every file is
+-- guaranteed to come from one commit.
 --
 -- Use --branch=<commit-sha> to install an exact revision (also immutable).
--- Use --branch=main only to test unreleased code, and expect the above.
+-- Use --branch=main only to test unreleased code.
 local REPO = "sblndn20/monitoring-app"
-local BRANCH = "v1.2.1"
+local BRANCH = "v1.2.2"
 
 -- What this installer expects to find on disk afterwards. Checked at the end so
 -- a stale mirror is reported instead of passing as a clean install.
-local EXPECTED_VERSION = "1.2.1"
+local EXPECTED_VERSION = "1.2.2"
 
 local INSTALL_DIR = "/home/EMON"
 
@@ -172,7 +170,7 @@ end
 if branch == "main" or branch == "master" then
     print("WARNING: '" .. branch .. "' is a branch. Mirrors cache branch refs per")
     print("file, so files may arrive from different commits. Prefer a tag or a")
-    print("commit SHA: setup --branch=v1.2.1")
+    print("commit SHA: setup --branch=v1.2.2")
 end
 
 local mirror = selectMirror()

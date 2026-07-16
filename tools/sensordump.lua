@@ -12,6 +12,15 @@
 
 package.path = "/home/EMON/?.lua;/home/EMON/?/init.lua;" .. package.path
 
+-- Same reason as init.lua: OpenOS keeps one package.loaded for the whole boot
+-- session, so require() would hand back modules loaded before the last update
+-- and this tool would report on code that is no longer on disk.
+for name in pairs(package.loaded) do
+    if name:match("^lib%.") or name:match("^core$") or name:match("^core%.") then
+        package.loaded[name] = nil
+    end
+end
+
 local component = require("component")
 
 local parser = require("lib.utils.parser")
