@@ -13,7 +13,7 @@ local util = require("core.util")
 local config = {}
 
 config.VERSION = 1
-config.directory = "/home/EMON/settings"
+config.directory = "/home/ARGUS/settings"
 config.path = config.directory .. "/config"
 
 local function defaults()
@@ -42,7 +42,7 @@ local function defaults()
         -- cycle:  rotate through every view instead of pinning one.
         glasses = {},
 
-        -- Wipe every AR object on the glasses at startup. If EMON is killed or
+        -- Wipe every AR object on the glasses at startup. If ARGUS is killed or
         -- crashes, its overlay objects stay in the glasses forever: the handles
         -- needed to remove them died with the process, and removeAll() is the
         -- only way back. Turn this off if you run other AR programs on the same
@@ -145,7 +145,7 @@ function config.save(data)
 end
 
 -- What setup.lua recorded at install time: the ref it fetched and the mirror it
--- came from. Returns nil when EMON was installed some other way (files copied
+-- came from. Returns nil when ARGUS was installed some other way (files copied
 -- straight onto the disk, for instance).
 function config.installedRef()
     local file = io.open(config.directory .. "/installed", "r")

@@ -1,16 +1,16 @@
 -- Sensor diagnostics.
 --
---   cd /home/EMON && tools/sensordump.lua
+--   cd /home/ARGUS && tools/sensordump.lua
 --
 -- Prints, for every attached energy component: its type, the raw
 -- getSensorInformation() lines with their indices, which adapter claims it, and
--- what EMON parses out of it.
+-- what ARGUS parses out of it.
 --
 -- This exists because GregTech's sensor text is version- and addon-dependent.
--- If EMON shows a wrong figure on your pack, paste this output into an issue —
+-- If ARGUS shows a wrong figure on your pack, paste this output into an issue —
 -- it is the whole picture needed to fix the parsing.
 
-package.path = "/home/EMON/?.lua;/home/EMON/?/init.lua;" .. package.path
+package.path = "/home/ARGUS/?.lua;/home/ARGUS/?/init.lua;" .. package.path
 
 -- Same reason as init.lua: OpenOS keeps one package.loaded for the whole boot
 -- session, so require() would hand back modules loaded before the last update
@@ -37,9 +37,9 @@ local GETTERS = {
     "getStoredEUString", "getEUCapacityString", "getName", "isWorkAllowed", "hasWork",
 }
 
--- Every component first, unfiltered. If EMON sees no buffers, the answer is
+-- Every component first, unfiltered. If ARGUS sees no buffers, the answer is
 -- almost always here: either the machine's component never appeared at all
--- (adapter not touching the controller), or it appeared under a type EMON does
+-- (adapter not touching the controller), or it appeared under a type ARGUS does
 -- not recognise. Filtering this list would hide exactly the case being debugged.
 local all, total = {}, 0
 for address, componentType in component.list() do
@@ -48,7 +48,7 @@ for address, componentType in component.list() do
 end
 table.sort(all, function(a, b) return a.type < b.type end)
 
-print("EMON sensor dump")
+print("ARGUS sensor dump")
 line("=")
 print("All components visible to this computer (" .. total .. "):")
 for _, item in ipairs(all) do
@@ -72,7 +72,7 @@ if #candidates == 0 then
     print("  * the Adapter must be connected to this computer (adjacent or cabled);")
     print("  * an MFU inside the Adapter can link a controller up to 16 blocks away.")
     print("")
-    print("If you DO see an unfamiliar type above, report it — EMON may just need")
+    print("If you DO see an unfamiliar type above, report it — ARGUS may just need")
     print("an adapter for it.")
     return
 end
@@ -124,7 +124,7 @@ for _, candidate in ipairs(candidates) do
             print("getSensorInformation(): " .. #lines .. " lines")
             for i = 1, #lines do
                 -- Colour codes are stripped for readability; the value shown is
-                -- what EMON's label matcher actually sees.
+                -- what ARGUS's label matcher actually sees.
                 print(string.format("  [%2d] %s", i, lines[i]))
             end
         end

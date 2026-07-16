@@ -1,10 +1,10 @@
--- EMON — GregTech energy monitor for OpenComputers.
--- Entry point: run from the OpenOS shell (`cd /home/EMON && init`).
+-- ARGUS — GregTech energy monitor for OpenComputers.
+-- Entry point: run from the OpenOS shell (`cd /home/ARGUS && init`).
 
 -- Prepend rather than append so our own modules win against same-named OpenOS
 -- libraries. `?/init.lua` is what makes require("core.sources") resolve to
 -- core/sources/init.lua.
-package.path = "/home/EMON/?.lua;/home/EMON/?/init.lua;" .. package.path
+package.path = "/home/ARGUS/?.lua;/home/ARGUS/?/init.lua;" .. package.path
 
 -- Drop our own modules from the require cache before loading any of them.
 --
@@ -149,6 +149,6 @@ local ok, err = xpcall(run, debug.traceback)
 if not ok then
     -- Leave the terminal usable, then surface the failure.
     restoreScreen()
-    io.stderr:write("EMON crashed:\n" .. tostring(err) .. "\n")
+    io.stderr:write("ARGUS crashed:\n" .. tostring(err) .. "\n")
     computer.beep(880, 0.2)
 end

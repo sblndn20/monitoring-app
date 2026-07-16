@@ -154,15 +154,21 @@ function panel.draw(x, row, width, rows, view, theme, palette, graphWindow)
 end
 
 -- Header line: source name on the left, state pill on the right.
+local BRAND = "ARGUS"
+
 function panel.header(x, row, width, view, theme, palette)
-    graphics.text(x, row, "EMON", theme.primary, true)
+    graphics.text(x, row, BRAND, theme.primary, true)
 
     local stateColor = palette[STATE_COLORS[view.state] or "muted"] or theme.muted
     local pill = "● " .. (view.state or "?")
     local pillWidth = text.len(pill)
 
+    -- Measured, not a magic offset: the name used to be placed at a hardcoded
+    -- x+5 that happened to suit the old four-letter name and collided the moment
+    -- the app was renamed.
+    local nameX = x + text.len(BRAND) + 1
     -- Truncate the name rather than let it collide with the state pill.
-    graphics.text(x + 5, row, text.fit("· " .. (view.name or "?"), width - pillWidth - 6),
+    graphics.text(nameX, row, text.fit("· " .. (view.name or "?"), width - pillWidth - (nameX - x) - 1),
         theme.text, true)
     graphics.text(x + width - pillWidth, row, pill, stateColor, true)
 end

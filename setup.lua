@@ -1,6 +1,6 @@
--- EMON installer.
+-- ARGUS installer.
 --
---   wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.4.0/setup.lua && setup
+--   wget -f https://cdn.jsdelivr.net/gh/sblndn20/ARGUS@v2.0.0/setup.lua && setup
 --
 -- Note the `&&`: without it, a failed wget leaves the PREVIOUS setup.lua in
 -- place and `setup` cheerfully runs that instead, installing whatever ref that
@@ -36,14 +36,14 @@ local shell = require("shell")
 --
 -- Use --branch=<commit-sha> to install an exact revision (also immutable).
 -- Use --branch=main only to test unreleased code.
-local REPO = "sblndn20/monitoring-app"
-local BRANCH = "v1.4.0"
+local REPO = "sblndn20/ARGUS"
+local BRANCH = "v2.0.0"
 
 -- What this installer expects to find on disk afterwards. Checked at the end so
 -- a stale mirror is reported instead of passing as a clean install.
-local EXPECTED_VERSION = "1.4.0"
+local EXPECTED_VERSION = "2.0.0"
 
-local INSTALL_DIR = "/home/EMON"
+local INSTALL_DIR = "/home/ARGUS"
 
 -- `branch` may equally be a tag or a full commit SHA. A SHA is worth knowing
 -- about: jsDelivr caches a branch reference for hours, so right after a push
@@ -100,7 +100,7 @@ local repo = options.repo or REPO
 local branch = options.branch or args[1] or BRANCH
 
 if not component.isAvailable("internet") then
-    io.stderr:write("An Internet Card is required to install EMON.\n")
+    io.stderr:write("An Internet Card is required to install ARGUS.\n")
     return
 end
 
@@ -128,7 +128,7 @@ local function selectMirror()
         return nil
     end
 
-    local probe = "/tmp/emon-probe"
+    local probe = "/tmp/argus-probe"
     for _, mirror in ipairs(MIRRORS) do
         io.write("Trying " .. mirror.name .. " ... ")
         filesystem.remove(probe)
@@ -142,26 +142,68 @@ local function selectMirror()
     return nil
 end
 
-print("EMON installer — " .. repo .. "@" .. branch)
+print("ARGUS installer — " .. repo .. "@" .. branch)
+
+local SETTINGS_DIR = INSTALL_DIR .. "/settings"
+local CONFIG_FILE = SETTINGS_DIR .. "/config"
+local CONFIG_BACKUP = "/tmp/argus-config"
+
+-- filesystem.copy handles FILES ONLY. OpenOS implements it as
+--     local input = filesystem.open(fromPath, "rb")
+-- which fails on a directory, so copy returns false and copies nothing —
+-- without raising. Passing it `settings/` therefore did nothing at all, and the
+-- wipe that followed took the settings with it. Copy the config file itself.
+local function stashConfig(from)
+    if not filesystem.exists(from) then return false end
+    filesystem.remove(CONFIG_BACKUP)
+    return filesystem.copy(from, CONFIG_BACKUP) and true or false
+end
+
+local function restoreConfig()
+    if not filesystem.exists(CONFIG_BACKUP) then return false end
+    filesystem.makeDirectory(SETTINGS_DIR)
+    local ok = filesystem.copy(CONFIG_BACKUP, CONFIG_FILE)
+    filesystem.remove(CONFIG_BACKUP)
+    return ok and true or false
+end
+
+-- Move an install made under the app's previous name. Left alone, the old tree
+-- keeps its settings hostage and its autostart line points at a directory that
+-- is about to stop existing.
+local LEGACY_DIR = "/home/EMON"
+if filesystem.exists(LEGACY_DIR) and LEGACY_DIR ~= INSTALL_DIR then
+    print("Found a previous install at " .. LEGACY_DIR)
+    if not filesystem.exists(CONFIG_FILE) and stashConfig(LEGACY_DIR .. "/settings/config") then
+        if restoreConfig() then print("  settings carried over") end
+    end
+    filesystem.remove(LEGACY_DIR)
+    print("  removed " .. LEGACY_DIR)
+
+    -- Autostart still names the old directory; booting would land in nothing.
+    local shrc = io.open("/home/.shrc", "r")
+    if shrc then
+        local body = shrc:read("*a") or ""
+        shrc:close()
+        if body:find(LEGACY_DIR, 1, true) then
+            local rewritten = io.open("/home/.shrc", "w")
+            if rewritten then
+                rewritten:write("cd " .. INSTALL_DIR .. "\ninit\ncd\n")
+                rewritten:close()
+                print("  autostart repointed at " .. INSTALL_DIR)
+            end
+        end
+    end
+end
 
 -- Wipe first when asked. A file that a newer layout no longer downloads would
 -- otherwise sit there forever, and a half-updated tree fails in confusing ways
--- (a function that exists in the repo reported as nil). Settings are preserved.
+-- (a function that exists in the repo reported as nil).
 if options.clean then
-    local keep = INSTALL_DIR .. "/settings"
-    local backup = "/tmp/emon-settings"
-    filesystem.remove(backup)
-    if filesystem.exists(keep) then filesystem.copy(keep, backup) end
-
-    print("Removing " .. INSTALL_DIR .. " (settings kept)")
+    local kept = stashConfig(CONFIG_FILE)
+    print("Removing " .. INSTALL_DIR .. (kept and " (settings kept)" or ""))
     filesystem.remove(INSTALL_DIR)
     filesystem.makeDirectory(INSTALL_DIR)
-
-    if filesystem.exists(backup) then
-        filesystem.makeDirectory(keep)
-        filesystem.copy(backup, keep)
-        filesystem.remove(backup)
-    end
+    restoreConfig()
 end
 
 -- A branch ref is cached per file by the CDN, so files can arrive from
@@ -170,7 +212,7 @@ end
 if branch == "main" or branch == "master" then
     print("WARNING: '" .. branch .. "' is a branch. Mirrors cache branch refs per")
     print("file, so files may arrive from different commits. Prefer a tag or a")
-    print("commit SHA: setup --branch=v1.4.0")
+    print("commit SHA: setup --branch=v2.0.0")
 end
 
 local mirror = selectMirror()
@@ -207,14 +249,14 @@ end
 
 -- Settings live under the install dir and are never fetched, so a reinstall
 -- keeps the user's configuration.
-if not filesystem.exists(INSTALL_DIR .. "/settings") then
-    filesystem.makeDirectory(INSTALL_DIR .. "/settings")
+if not filesystem.exists(SETTINGS_DIR) then
+    filesystem.makeDirectory(SETTINGS_DIR)
 end
 
 -- Record what was installed. Without this there is no way to tell a stale
 -- install from a fresh one — every build reports the same version string, and
 -- a mirror can serve a cached copy of a branch for hours without saying so.
-local stamp = io.open(INSTALL_DIR .. "/settings/installed", "w")
+local stamp = io.open(SETTINGS_DIR .. "/installed", "w")
 if stamp then
     stamp:write(branch .. "\n" .. mirror.name .. "\n")
     stamp:close()
@@ -222,7 +264,7 @@ end
 
 -- Autostart via /home/.shrc, which /etc/profile.lua sources on every shell
 -- login. `cd` first: OpenOS resolves program names against the working dir.
-io.write("Run EMON automatically on boot? [Y/n] ")
+io.write("Run ARGUS automatically on boot? [Y/n] ")
 local answer = (io.read() or ""):lower()
 if answer ~= "n" then
     local shrc = io.open("/home/.shrc", "w")

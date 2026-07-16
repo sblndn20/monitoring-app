@@ -1,4 +1,4 @@
--- EMON palette.
+-- ARGUS palette.
 -- Internally every colour is a hex literal (0xRRGGBB).
 --
 -- NOTE: OpenOS ships its own `colors` library. Always require this one by its

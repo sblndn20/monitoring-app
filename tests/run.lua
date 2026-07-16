@@ -1,4 +1,4 @@
--- EMON test suite.
+-- ARGUS test suite.
 --
 -- Runs on a desktop Lua 5.2+ interpreter, outside Minecraft:
 --   lua tests/run.lua        (from the repo root)
@@ -83,7 +83,7 @@ package.preload["event"] = function()
 end
 
 -- Records every object created on it, so the AR panel can be inspected without
--- a pair of glasses. Mirrors the OpenGlasses API surface EMON actually uses.
+-- a pair of glasses. Mirrors the OpenGlasses API surface ARGUS actually uses.
 local function fakeGlasses()
     local glasses = {objects = {}, nextId = 0}
     local function newObject(kind)
@@ -104,7 +104,7 @@ local function fakeGlasses()
     end
     -- The glasses proxy is a component proxy, so its own methods are callable
     -- tables like any other. (The widget objects it returns are plain value
-    -- tables, which is why NIDAS and EMON call them with `.`.)
+    -- tables, which is why NIDAS and ARGUS call them with `.`.)
     glasses.addQuad = method(function() return newObject("quad") end)
     glasses.addTextLabel = method(function() return newObject("text") end)
     glasses.removeObject = method(function(id) glasses.objects[id] = nil end)
@@ -282,7 +282,7 @@ eq("lsc reads EU IN, not Avg EU IN", reading.euIn, 32768)
 eq("lsc reads EU OUT", reading.euOut, 0)
 eq("lsc reads no problems", reading.problems, 0)
 eq("lsc is online when power flows", reading.state, states.ONLINE)
--- GTNH computes these windows itself, so EMON uses them rather than resampling.
+-- GTNH computes these windows itself, so ARGUS uses them rather than resampling.
 eq("lsc takes the 5-minute average from the sensor", reading.avg5m, 26000)
 eq("lsc takes the 1-hour average from the sensor", reading.avg1h, 20000)
 check("lsc reports wireless mode", reading.wireless ~= nil and reading.wireless.enabled == true)
