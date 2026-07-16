@@ -1,0 +1,6 @@
+# OpenOS is a Unix-like environment: CRLF breaks .shrc (the shell would try to
+# run "init\r") and is served verbatim by raw.githubusercontent.com, which is
+# where setup.lua fetches from. Force LF regardless of contributor platform.
+* text=auto eol=lf
+*.lua text eol=lf
+.shrc text eol=lf
