@@ -166,6 +166,15 @@ if not filesystem.exists(INSTALL_DIR .. "/settings") then
     filesystem.makeDirectory(INSTALL_DIR .. "/settings")
 end
 
+-- Record what was installed. Without this there is no way to tell a stale
+-- install from a fresh one — every build reports the same version string, and
+-- a mirror can serve a cached copy of a branch for hours without saying so.
+local stamp = io.open(INSTALL_DIR .. "/settings/installed", "w")
+if stamp then
+    stamp:write(branch .. "\n" .. mirror.name .. "\n")
+    stamp:close()
+end
+
 -- Autostart via /home/.shrc, which /etc/profile.lua sources on every shell
 -- login. `cd` first: OpenOS resolves program names against the working dir.
 io.write("Run EMON automatically on boot? [Y/n] ")

@@ -27,6 +27,16 @@ app.__index = app
 
 local SCALE_ORDER = {"fast", "medium", "slow"}
 
+-- Build identity, shown in the footer. An install that silently did not update
+-- is otherwise indistinguishable from one that did — mirrors serve cached
+-- copies of a branch for hours without saying so.
+local function buildLabel()
+    local ok, version = pcall(require, "version")
+    local label = "v" .. (ok and tostring(version) or "?")
+    local ref = configuration.installedRef()
+    return ref and (label .. " @" .. ref) or label
+end
+
 -- `hud` is optional: the Glasses page uses it to report the viewport detected
 -- from glasses_on, but nothing breaks without it.
 function app.new(monitor, config, hud)
@@ -350,10 +360,14 @@ function app:footer(width, rows, theme)
         theme, function() self:nextScale() self.dirty = true end, nil, false) + 1
 
     x = x + widgets.button(x, row, "Save", theme, function() self:save() end, nil, false) + 1
-    widgets.button(x, row, "Quit", theme, function() self.running = false end, nil, false)
+    x = x + widgets.button(x, row, "Quit", theme, function() self.running = false end, nil, false) + 2
+
+    local build = self.build or buildLabel()
+    self.build = build
+    graphics.text(width - text.len(build) - 1, row, build, theme.muted, true)
 
     if self.status then
-        graphics.text(width - text.len(self.status) - 1, row, self.status, theme.muted, true)
+        graphics.text(x, row, self.status, theme.primary, true)
     end
 end
 

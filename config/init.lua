@@ -139,6 +139,20 @@ function config.save(data)
     return true
 end
 
+-- What setup.lua recorded at install time: the ref it fetched and the mirror it
+-- came from. Returns nil when EMON was installed some other way (files copied
+-- straight onto the disk, for instance).
+function config.installedRef()
+    local file = io.open(config.directory .. "/installed", "r")
+    if not file then return nil end
+    local ref = file:read("*l")
+    file:close()
+    if not ref or ref == "" then return nil end
+    -- A commit SHA is unreadable in full and the first characters identify it.
+    if #ref > 12 then return ref:sub(1, 7) end
+    return ref
+end
+
 function config.glassesFor(data, address)
     data.glasses[address] = util.defaults(data.glasses[address], config.glassesDefaults())
     return data.glasses[address]
