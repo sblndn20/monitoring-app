@@ -62,7 +62,7 @@ Computronics `1.9.3-GTNH`).
 
 ```shell
 cd /home
-wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.0/setup.lua && setup
+wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.1/setup.lua && setup
 ```
 
 Установщик сам переберёт зеркала, скачает файлы в `/home/EMON` и предложит включить
@@ -77,7 +77,7 @@ wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.0/setup.lua && 
 Через `raw.githubusercontent.com` — если он у вас доступен из игры (см. ниже):
 
 ```shell
-wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.2.0/setup.lua && setup
+wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.2.1/setup.lua && setup
 ```
 
 Полезные ключи:
@@ -85,7 +85,7 @@ wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.2.0/setup.l
 ```shell
 setup --repo=user/repo                 # ставить из форка
 setup --mirror=raw                     # заставить конкретное зеркало
-setup --branch=v1.2.0                  # конкретный тег
+setup --branch=v1.2.1                  # конкретный тег
 setup --branch=<commit-sha>            # точная ревизия
 setup --branch=main                    # неопубликованный код (см. предупреждение выше)
 ```

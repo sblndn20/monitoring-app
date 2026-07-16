@@ -1,11 +1,15 @@
 -- EMON installer.
 --
---   wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@main/setup.lua && setup
+--   wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.1/setup.lua && setup
+--
+-- Note the `&&`: without it, a failed wget leaves the PREVIOUS setup.lua in
+-- place and `setup` cheerfully runs that instead, installing whatever ref that
+-- old copy defaults to. The failure then looks like "the update did nothing".
 --
 -- Files are fetched individually rather than as a release tarball. NIDAS pulls
 -- a third-party tar binary into /bin first because OpenOS has no archiver; with
 -- ~30 files that dependency is not worth it, and this way the installer works
--- straight from a branch with no release pipeline behind it.
+-- straight from a tag with no release pipeline behind it.
 --
 -- MIRRORS: raw.githubusercontent.com is not reliably reachable from inside
 -- OpenComputers everywhere. Its TLS handshake is dropped on some networks,
@@ -35,7 +39,11 @@ local shell = require("shell")
 -- Use --branch=<commit-sha> to install an exact revision (also immutable).
 -- Use --branch=main only to test unreleased code, and expect the above.
 local REPO = "sblndn20/monitoring-app"
-local BRANCH = "v1.2.0"
+local BRANCH = "v1.2.1"
+
+-- What this installer expects to find on disk afterwards. Checked at the end so
+-- a stale mirror is reported instead of passing as a clean install.
+local EXPECTED_VERSION = "1.2.1"
 
 local INSTALL_DIR = "/home/EMON"
 
@@ -136,7 +144,27 @@ local function selectMirror()
     return nil
 end
 
-print("Installing EMON " .. repo .. "@" .. branch)
+print("EMON installer — " .. repo .. "@" .. branch)
+
+-- Wipe first when asked. A file that a newer layout no longer downloads would
+-- otherwise sit there forever, and a half-updated tree fails in confusing ways
+-- (a function that exists in the repo reported as nil). Settings are preserved.
+if options.clean then
+    local keep = INSTALL_DIR .. "/settings"
+    local backup = "/tmp/emon-settings"
+    filesystem.remove(backup)
+    if filesystem.exists(keep) then filesystem.copy(keep, backup) end
+
+    print("Removing " .. INSTALL_DIR .. " (settings kept)")
+    filesystem.remove(INSTALL_DIR)
+    filesystem.makeDirectory(INSTALL_DIR)
+
+    if filesystem.exists(backup) then
+        filesystem.makeDirectory(keep)
+        filesystem.copy(backup, keep)
+        filesystem.remove(backup)
+    end
+end
 
 -- A branch ref is cached per file by the CDN, so files can arrive from
 -- different commits and leave a mix that crashes on a missing function. Only
@@ -144,7 +172,7 @@ print("Installing EMON " .. repo .. "@" .. branch)
 if branch == "main" or branch == "master" then
     print("WARNING: '" .. branch .. "' is a branch. Mirrors cache branch refs per")
     print("file, so files may arrive from different commits. Prefer a tag or a")
-    print("commit SHA: setup --branch=v1.2.0")
+    print("commit SHA: setup --branch=v1.2.1")
 end
 
 local mirror = selectMirror()
@@ -209,7 +237,27 @@ if answer ~= "n" then
     end
 end
 
+-- Read back what actually landed on disk. Downloading successfully is not the
+-- same as installing what was asked for: a CDN can serve a cached copy of an
+-- older commit and every request still reports success.
+local installed = "?"
+local versionFile = io.open(INSTALL_DIR .. "/version.lua", "r")
+if versionFile then
+    installed = (versionFile:read("*a") or ""):match('"([^"]+)"') or "?"
+    versionFile:close()
+end
+
 print("")
-print("Installed to " .. INSTALL_DIR .. " from " .. mirror.name)
+print("Installed " .. #FILES .. " files to " .. INSTALL_DIR)
+print("  version : " .. installed)
+print("  ref     : " .. branch)
+print("  mirror  : " .. mirror.name)
+if installed ~= EXPECTED_VERSION then
+    print("")
+    print("WARNING: expected version " .. EXPECTED_VERSION .. " but " .. installed
+        .. " landed on disk.")
+    print("The mirror served a stale copy. Retry with:  setup --clean --mirror=raw")
+end
+print("")
 print("Start it now with:  cd " .. INSTALL_DIR .. " && init")
 print("Sensor diagnostics: cd " .. INSTALL_DIR .. " && tools/sensordump.lua")

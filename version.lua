@@ -1,3 +1,4 @@
--- Bump this with every user-visible change. It is shown in the app footer, so
--- it is the fastest way to tell whether an install actually updated.
-return "1.2.0"
+-- Bump this with every user-visible change. It is shown in the app footer and
+-- checked by setup.lua after install, so it is the fastest way to tell whether
+-- an install actually updated. Keep EXPECTED_VERSION in setup.lua in step.
+return "1.2.1"
