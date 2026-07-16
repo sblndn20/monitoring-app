@@ -61,24 +61,33 @@ Computronics `1.9.3-GTNH`).
 В шелле OpenOS:
 
 ```shell
-wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@main/setup.lua && setup
+cd /home
+wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.0/setup.lua && setup
 ```
 
 Установщик сам переберёт зеркала, скачает файлы в `/home/EMON` и предложит включить
-автозапуск.
+автозапуск. Версия установленной сборки видна в правом нижнем углу приложения.
+
+> **Ставьте с тега, а не с ветки.** jsDelivr кеширует ссылку на ветку (`@main`)
+> **отдельно для каждого файла** и на несколько часов. Поэтому `@main` способен отдать
+> разные файлы из разных коммитов, и установка получится «сборной»: часть файлов новая,
+> часть старая. Ломается это потом как `attempt to call a nil value` на функции, которая
+> в репозитории очевидно есть. Теги и SHA коммитов неизменяемы, с ними такого не бывает.
 
 Через `raw.githubusercontent.com` — если он у вас доступен из игры (см. ниже):
 
 ```shell
-wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/main/setup.lua && setup
+wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.2.0/setup.lua && setup
 ```
 
 Полезные ключи:
 
 ```shell
-setup --repo=user/repo --branch=main   # ставить из форка
+setup --repo=user/repo                 # ставить из форка
 setup --mirror=raw                     # заставить конкретное зеркало
-setup --branch=<commit-sha>            # точная ревизия (см. про кеш jsDelivr ниже)
+setup --branch=v1.2.0                  # конкретный тег
+setup --branch=<commit-sha>            # точная ревизия
+setup --branch=main                    # неопубликованный код (см. предупреждение выше)
 ```
 
 Запуск вручную:

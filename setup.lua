@@ -24,8 +24,18 @@ local filesystem = require("filesystem")
 local shell = require("shell")
 
 -- Override with `setup --repo=user/repo --branch=name` when installing a fork.
+--
+-- The default is a TAG, not a branch, and that matters. jsDelivr caches a
+-- branch ref per file for hours, so `@main` can hand back a different vintage
+-- for each file: an install then ends up with some files current and some
+-- stale, which fails as "attempt to call a nil value" on a function that
+-- plainly exists in the repo. A tag is immutable, so every file is guaranteed
+-- to come from the same commit.
+--
+-- Use --branch=<commit-sha> to install an exact revision (also immutable).
+-- Use --branch=main only to test unreleased code, and expect the above.
 local REPO = "sblndn20/monitoring-app"
-local BRANCH = "main"
+local BRANCH = "v1.2.0"
 
 local INSTALL_DIR = "/home/EMON"
 
@@ -127,6 +137,15 @@ local function selectMirror()
 end
 
 print("Installing EMON " .. repo .. "@" .. branch)
+
+-- A branch ref is cached per file by the CDN, so files can arrive from
+-- different commits and leave a mix that crashes on a missing function. Only
+-- tags and commit SHAs are immutable.
+if branch == "main" or branch == "master" then
+    print("WARNING: '" .. branch .. "' is a branch. Mirrors cache branch refs per")
+    print("file, so files may arrive from different commits. Prefer a tag or a")
+    print("commit SHA: setup --branch=v1.2.0")
+end
 
 local mirror = selectMirror()
 if not mirror then
