@@ -27,10 +27,13 @@ app.__index = app
 
 local SCALE_ORDER = {"fast", "medium", "slow"}
 
-function app.new(monitor, config)
+-- `hud` is optional: the Glasses page uses it to report the viewport detected
+-- from glasses_on, but nothing breaks without it.
+function app.new(monitor, config, hud)
     return setmetatable({
         monitor = monitor,
         config = config,
+        hud = hud,
         page = "dashboard",
         running = true,
         dirty = true,
@@ -286,15 +289,36 @@ function app:drawGlasses(width, rows, theme)
     x = x + widgets.button(x, row, settings.compact and "compact" or "full", theme, function()
         settings.compact = not settings.compact self.dirty = true
     end, nil, settings.compact) + 2
-    graphics.text(x, row, "GUI scale", theme.muted, true)
-    x = x + 10
-    x = x + widgets.button(x, row, tostring(settings.scale), theme, function()
-        settings.scale = cycleValue(SCALES, settings.scale)
-        self.dirty = true
-    end, nil, true) + 2
-    graphics.text(x, row, "must match Video Settings → GUI Scale", theme.muted, true)
+
+    -- Viewport comes from the glasses_on signal; the manual GUI scale is only a
+    -- fallback for before they have been worn.
+    local viewport = self.hud and self.hud.viewport[self.selectedGlasses]
+    x = x + widgets.button(x, row, settings.autoResolution ~= false and "auto size" or "manual",
+        theme, function()
+            settings.autoResolution = not (settings.autoResolution ~= false)
+            self.dirty = true
+        end, nil, settings.autoResolution ~= false) + 2
+
+    if settings.autoResolution ~= false then
+        if viewport then
+            graphics.text(x, row, string.format("detected %dx%d", viewport.width, viewport.height),
+                theme.muted, true)
+        else
+            graphics.text(x, row, "put the glasses on to detect the size", theme.muted, true)
+        end
+    else
+        graphics.text(x, row, "GUI scale", theme.muted, true)
+        x = x + 10
+        widgets.button(x, row, tostring(settings.scale), theme, function()
+            settings.scale = cycleValue(SCALES, settings.scale)
+            self.dirty = true
+        end, nil, true)
+    end
     row = row + 2
 
+    graphics.text(2, row, "In-game: bind Controls → openGlasses → \"Free Cursor (Toggle)\" (unbound", theme.muted, true)
+    graphics.text(2, row + 1, "by default), then click ‹ › on the HUD, or press ← → / 1-9 / C.", theme.muted, true)
+    row = row + 3
     graphics.text(2, row, "Changes apply instantly. Press Save to keep them.", theme.muted, true)
 end
 

@@ -88,13 +88,24 @@ for _, candidate in ipairs(candidates) do
         line()
         print("Structured getters:")
         for _, method in ipairs(GETTERS) do
-            if type(proxy[method]) == "function" then
+            -- util.callable, not a "function" check: OpenComputers exposes proxy
+            -- methods as tables with a __call metamethod.
+            if util.callable(proxy[method]) then
                 local value = util.call(proxy, method)
                 print(string.format("  %-22s = %s", method, tostring(value)))
             else
                 print(string.format("  %-22s   (absent)", method))
             end
         end
+
+        -- Anything the proxy actually offers, in case a method has been renamed
+        -- and the list above is simply looking for the wrong name.
+        local available = {}
+        for key, value in pairs(proxy) do
+            if util.callable(value) then table.insert(available, key) end
+        end
+        table.sort(available)
+        print("  all callable methods: " .. (#available > 0 and table.concat(available, ", ") or "(none)"))
 
         line()
         local lines = sensor.lines(proxy)

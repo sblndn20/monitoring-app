@@ -59,8 +59,8 @@ local function run()
 
     local hasScreen = setupScreen(config)
     local monitor = monitorLib.new(config)
-    local application = app.new(monitor, config)
     local hud = arHud.new(config)
+    local application = app.new(monitor, config, hud)
 
     if not hasScreen then
         config.screen.enabled = false
@@ -85,6 +85,11 @@ local function run()
         elseif name == "component_added" or name == "component_removed" then
             -- A buffer was plugged in or pulled; refresh the known component list.
             configuration.syncBuffers(config, sources.discover())
+        elseif name == "hud_click" or name == "hud_keyboard" or name == "glasses_on" then
+            -- Input from the glasses themselves, so the wearer can switch source
+            -- without walking back to the computer.
+            hud:handleSignal(monitor, name, table.unpack(signal, 2))
+            application.dirty = true
         end
     end
 

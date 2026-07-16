@@ -15,13 +15,16 @@
 --     Those parenthesised digits would corrupt a naive digits-only parse.
 
 local parser = require("lib.utils.parser")
+local util = require("core.util")
 
 local sensor = {}
 
 -- Read and normalise sensor lines. Returns an array of colour-stripped strings,
 -- or nil if the component does not answer.
 function sensor.lines(proxy)
-    if not proxy or type(proxy.getSensorInformation) ~= "function" then return nil end
+    -- util.callable, not a "function" check: OpenComputers proxy methods are
+    -- tables with a __call metamethod. See util.callable.
+    if not proxy or not util.callable(proxy.getSensorInformation) then return nil end
     local ok, raw = pcall(proxy.getSensorInformation)
     if not ok or type(raw) ~= "table" then return nil end
 

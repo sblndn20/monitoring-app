@@ -8,6 +8,10 @@
 -- Glasses objects are created ONCE and mutated per tick. Recreating them every
 -- frame leaks objects into the glasses until it chokes — the AR API has no
 -- implicit frame boundary.
+--
+-- The card carries its own ‹ › buttons. OCGlasses has no interactive widget
+-- type (no addButton, no onClick — only drawing primitives), so a "button" is a
+-- rectangle plus a hit box we test ourselves against the hud_click signal.
 
 local ar = require("lib.graphics.ar")
 local palette = require("lib.graphics.colors")
@@ -34,6 +38,14 @@ panel.ANCHORS = {
     "bottom-left", "bottom-center", "bottom-right",
 }
 
+local STATE_COLORS = {
+    [states.ONLINE]  = palette.green,
+    [states.IDLE]    = palette.muted,
+    [states.OFF]     = palette.slate,
+    [states.PROBLEM] = palette.amber,
+    [states.MISSING] = palette.red,
+}
+
 local function anchorPosition(anchor, resolution, width)
     local left = MARGIN
     local center = (resolution[1] - width) / 2
@@ -55,14 +67,6 @@ end
 
 panel.anchorPosition = anchorPosition
 
-local STATE_COLORS = {
-    [states.ONLINE]  = palette.green,
-    [states.IDLE]    = palette.muted,
-    [states.OFF]     = palette.slate,
-    [states.PROBLEM] = palette.amber,
-    [states.MISSING] = palette.red,
-}
-
 local function chargeColor(fraction, theme)
     if fraction == nil then return theme.primary end
     if fraction < 0.10 then return palette.red end
@@ -71,8 +75,10 @@ local function chargeColor(fraction, theme)
     return theme.primary
 end
 
-function panel.new(glasses, settings, theme)
-    local resolution = screen.size({settings.resX, settings.resY}, settings.scale)
+-- `resolution` is the player's ScaledResolution as {width, height} — the same
+-- space hud_click reports its coordinates in, which is what makes the hit boxes
+-- below line up without any conversion.
+function panel.new(glasses, settings, theme, resolution)
     local width = settings.compact and COMPACT_WIDTH or WIDTH
 
     -- Snap to the chosen corner, then apply the user's nudge on top.
@@ -88,6 +94,7 @@ function panel.new(glasses, settings, theme)
         y = y,
         static = {},
         dynamic = {},
+        regions = {},
         lastColor = nil,
     }, panel)
 
@@ -99,20 +106,47 @@ function panel.new(glasses, settings, theme)
     table.insert(self.static, ar.rectangle(glasses, {x, y}, 2, HEIGHT, theme.primary, 0.9))
     table.insert(self.static, ar.rectangle(glasses, {x + 8, barY}, barWidth, 4, theme.panel, 0.8))
 
+    -- Source switcher. Hit boxes are deliberately larger than the glyphs: these
+    -- are aimed with a free cursor over a busy game view.
+    local buttonY = y + 3
+    table.insert(self.static, ar.text(glasses, "‹", {x + 7, buttonY}, theme.primary, 0.9))
+    table.insert(self.static, ar.text(glasses, "›", {x + 19, buttonY}, theme.primary, 0.9))
+    self:addRegion(x + 4, y + 1, 12, 12, "prev")
+    self:addRegion(x + 16, y + 1, 12, 12, "next")
+
     -- Live fields
-    self.dynamic.name = ar.text(glasses, "", {x + 8, y + 4}, theme.muted, 0.7)
-    self.dynamic.percent = ar.text(glasses, "", {x + width - 44, y + 3}, theme.primary, 1.0)
+    self.dynamic.name = ar.text(glasses, "", {x + 32, y + 4}, theme.muted, 0.7)
+    self.dynamic.percent = ar.text(glasses, "", {x + width - 44, buttonY}, theme.primary, 1.0)
     self.dynamic.bar = ar.rectangle(glasses, {x + 8, barY}, 1, 4, theme.primary, 1.0)
     self.dynamic.stored = ar.text(glasses, "", {x + 8, y + 21}, palette.text, 0.7)
     self.dynamic.rate = ar.text(glasses, "", {x + width - 60, y + 21}, palette.text, 0.7)
     self.dynamic.projection = ar.text(glasses, "", {x + 8, y + 28}, theme.muted, 0.6)
     self.dynamic.state = ar.text(glasses, "", {x + width - 60, y + 28}, palette.muted, 0.6)
 
+    -- Clicking the name toggles cycling, so the whole switcher lives in one place.
+    self:addRegion(x + 30, y + 1, width - 76, 12, "cycle")
+
     self.barX = x + 8
     self.barY = barY
     self.barWidth = barWidth
 
     return self
+end
+
+function panel:addRegion(x, y, width, height, action)
+    table.insert(self.regions, {x = x, y = y, width = width, height = height, action = action})
+end
+
+-- Returns the action under a hud_click, or nil when the click missed the card.
+function panel:hitTest(x, y)
+    for i = 1, #self.regions do
+        local region = self.regions[i]
+        if x >= region.x and x < region.x + region.width
+            and y >= region.y and y < region.y + region.height then
+            return region.action
+        end
+    end
+    return nil
 end
 
 function panel:setBar(fraction, color)
@@ -128,7 +162,7 @@ function panel:setBar(fraction, color)
     end
 end
 
-function panel:update(view)
+function panel:update(view, cycling)
     if not view then return end
 
     local fraction = view.percent
@@ -136,7 +170,10 @@ function panel:update(view)
 
     -- text.upper, not :upper — string.upper only handles ASCII and would leave
     -- a non-Latin buffer name untouched or mangled.
-    self.dynamic.name.setText(text.upper(view.name or "?"))
+    local name = text.upper(view.name or "?")
+    self.dynamic.name.setText(cycling and (name .. " ⟳") or name)
+    self.dynamic.name.setColor(screen.toRGB(cycling and self.theme.primary or self.theme.muted))
+
     self.dynamic.percent.setText(format.percent(fraction))
     self:setBar(fraction or 0, color)
 
@@ -167,7 +204,7 @@ function panel:remove()
     local dynamic = {}
     for _, object in pairs(self.dynamic) do table.insert(dynamic, object) end
     ar.remove(self.glasses, dynamic)
-    self.static, self.dynamic = {}, {}
+    self.static, self.dynamic, self.regions = {}, {}, {}
 end
 
 return panel

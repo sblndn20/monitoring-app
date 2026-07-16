@@ -11,6 +11,24 @@
 
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
+-- OpenComputers does NOT expose component methods as plain Lua functions.
+-- machine.lua builds each one as
+--     proxy[method] = setmetatable({address=..., name=...}, componentCallback)
+-- with __call supplying the invocation and __tostring returning the docstring.
+--
+-- Fixtures must model that exactly. They previously used plain functions, and
+-- that gap hid a real bug: the code tested type(x) == "function" and so treated
+-- every method on every real component as absent — a healthy LSC looked like it
+-- exposed nothing at all, and no buffer was ever detected in game.
+local componentCallback = {
+    __call = function(self, ...) return self.__fn(...) end,
+    __tostring = function() return "function" end,
+}
+
+local function method(fn)
+    return setmetatable({__fn = fn}, componentCallback)
+end
+
 -- Stub the OpenComputers API for modules that reach for it.
 local fakeComponents = {} -- address -> proxy
 local fakeTypes = {}      -- address -> component type
@@ -79,10 +97,14 @@ local function fakeGlasses()
         glasses.objects[id] = object
         return object
     end
-    glasses.addQuad = function() return newObject("quad") end
-    glasses.addTextLabel = function() return newObject("text") end
-    glasses.removeObject = function(id) glasses.objects[id] = nil end
-    glasses.removeAll = function() glasses.objects = {} end
+    -- The glasses proxy is a component proxy, so its own methods are callable
+    -- tables like any other. (The widget objects it returns are plain value
+    -- tables, which is why NIDAS and EMON call them with `.`.)
+    glasses.addQuad = method(function() return newObject("quad") end)
+    glasses.addTextLabel = method(function() return newObject("text") end)
+    glasses.removeObject = method(function(id) glasses.objects[id] = nil end)
+    glasses.removeAll = method(function() glasses.objects = {} end)
+    glasses.getBindPlayers = method(function() return "Tester" end)
     return glasses
 end
 
@@ -153,8 +175,14 @@ local function lscSensor(overrides)
 end
 
 local function proxy(lines, extra)
-    local p = {getSensorInformation = function() return lines end}
-    for key, value in pairs(extra or {}) do p[key] = value end
+    local p = {
+        address = "fixture",
+        type = "gt_machine",
+        getSensorInformation = method(function() return lines end),
+    }
+    for key, value in pairs(extra or {}) do
+        p[key] = (type(value) == "function") and method(value) or value
+    end
     return p
 end
 
@@ -179,6 +207,30 @@ eq("metricNumber handles negatives", parser.metricNumber(-2500000), "-2.5M")
 eq("getInteger strips separators and units", parser.getInteger("EU IN: 32,768EU/t"), 32768)
 eq("getInteger keeps the sign", parser.getInteger("Net: -1,500 EU/t"), -1500)
 eq("stripColors removes section codes", parser.stripColors("§aWorking perfectly§r"), "Working perfectly")
+
+-- util.callable ----------------------------------------------------------------
+--
+-- The single most load-bearing assumption in the whole data layer: what an
+-- OpenComputers component method actually *is*.
+
+local util = require("core.util")
+
+check("callable accepts a plain function", util.callable(function() end))
+-- The real shape: a table whose metatable supplies __call.
+check("callable accepts an OC-style method table", util.callable(method(function() end)))
+check("callable rejects a plain table", not util.callable({}))
+check("callable rejects a table with a metatable but no __call",
+    not util.callable(setmetatable({}, {__index = {}})))
+check("callable rejects a string", not util.callable("getEUStored"))
+check("callable rejects nil", not util.callable(nil))
+
+-- util.call must invoke through __call and survive a method that raises.
+local invoked = proxy(nil, {getEUStored = function() return 4242 end})
+eq("util.call invokes an OC-style method", util.call(invoked, "getEUStored"), 4242)
+eq("util.call returns nil for an absent method", util.call(invoked, "nopeNotHere"), nil)
+
+local exploding = proxy(nil, {boom = function() error("machine unplugged") end})
+eq("util.call swallows a raising method", util.call(exploding, "boom"), nil)
 
 -- sensor ---------------------------------------------------------------------
 
@@ -401,7 +453,8 @@ local arView = {
     net = 1200000, euIn = 10, euOut = 5, passiveLoss = 0, problems = 0,
 }
 
-local arInstance = arPanel.new(glasses, settings, theme)
+local viewport = {640, 360}
+local arInstance = arPanel.new(glasses, settings, theme, viewport)
 check("ar panel creates objects", countObjects(glasses) > 0)
 local createdCount = countObjects(glasses)
 
@@ -474,7 +527,7 @@ local anchored = fakeGlasses()
 local nudged = configuration.glassesDefaults()
 nudged.anchor = "top-left"
 nudged.offsetX, nudged.offsetY = 12, 20
-local nudgedPanel = arPanel.new(anchored, nudged, theme)
+local nudgedPanel = arPanel.new(anchored, nudged, theme, resolution)
 near("offsetX shifts the card right", nudgedPanel.x, 4 + 12)
 near("offsetY shifts the card down", nudgedPanel.y, 4 + 20)
 
@@ -518,6 +571,76 @@ check("hud rebuilds when geometry changes", hud.panels["glasses-1"] ~= nil)
 glassesSettings.enabled = false
 hud:update(monitor)
 eq("hud drops the panel when disabled", hud.panels["glasses-1"], nil)
+
+-- AR input ---------------------------------------------------------------------
+--
+-- OCGlasses has no clickable widget type, so the card's ‹ › buttons are plain
+-- rectangles plus hit boxes tested against the hud_click signal.
+
+glassesSettings.enabled = true
+glassesSettings.cycle = false
+glassesSettings.compact = false
+glassesSettings.anchor = "top-left"
+glassesSettings.source = nil -- the aggregate
+hud:update(monitor)
+
+local card = hud.panels["glasses-1"].instance
+eq("‹ maps to prev", card:hitTest(card.x + 8, card.y + 5), "prev")
+eq("› maps to next", card:hitTest(card.x + 20, card.y + 5), "next")
+eq("the name toggles cycling", card:hitTest(card.x + 40, card.y + 5), "cycle")
+eq("a click beside the card misses", card:hitTest(card.x - 50, card.y + 5), nil)
+eq("a click below the card misses", card:hitTest(card.x + 8, card.y + 100), nil)
+
+-- Clicking › walks to the next source. From the aggregate (last in the list)
+-- it wraps to the first.
+local handled = hud:handleSignal(monitor, "hud_click", "Tester", card.x + 20, card.y + 5, 0)
+check("hud_click on a button is handled", handled)
+eq("› switches the pinned source", glassesSettings.source, "lsc-address")
+
+hud:handleSignal(monitor, "hud_click", "Tester", card.x + 8, card.y + 5, 0)
+eq("‹ walks back to the aggregate", glassesSettings.source, nil)
+
+eq("a click that misses the card is not handled",
+    hud:handleSignal(monitor, "hud_click", "Tester", 9999, 9999, 0), false)
+
+-- OCGlasses documents these signals as (user, ...), but some OpenComputers
+-- component signals lead with the address. Both shapes must work.
+hud:handleSignal(monitor, "hud_click",
+    "b6ec6652-c56a-4128-a851-4b10b77d2c18", "Tester", card.x + 20, card.y + 5, 0)
+eq("a signal carrying a leading address still resolves", glassesSettings.source, "lsc-address")
+
+-- Hotkeys in the free-cursor overlay.
+glassesSettings.source = nil
+hud:handleSignal(monitor, "hud_keyboard", "Tester", 49, 2) -- '1'
+eq("digit 1 selects the first source", glassesSettings.source, "lsc-address")
+
+glassesSettings.cycle = false
+hud:handleSignal(monitor, "hud_keyboard", "Tester", 99, 46) -- 'c'
+check("c toggles cycling", glassesSettings.cycle)
+
+-- Arrow keys report character 0, so the key code has to be honoured too.
+glassesSettings.source = nil
+hud:handleSignal(monitor, "hud_keyboard", "Tester", 0, 205) -- right arrow
+eq("the right arrow steps the source", glassesSettings.source, "lsc-address")
+check("stepping the source leaves cycling off", not glassesSettings.cycle)
+
+-- glasses_on reports the player's real ScaledResolution. Adopting it is what
+-- makes the hit boxes line up with where hud_click says the cursor was.
+glassesSettings.anchor = "top-right"
+hud:handleSignal(monitor, "glasses_on", "Tester", 640, 360)
+check("glasses_on records the viewport", hud.viewport["glasses-1"] ~= nil)
+eq("viewport width is taken from the signal", hud.viewport["glasses-1"].width, 640)
+
+hud:update(monitor)
+local resized = hud.panels["glasses-1"].instance
+near("the card is laid out in the reported viewport", resized.x, 640 - 190 - 4)
+
+-- With autoResolution off, the manual GUI-scale settings win again.
+glassesSettings.autoResolution = false
+glassesSettings.resX, glassesSettings.resY, glassesSettings.scale = 1920, 1080, 2
+hud:update(monitor)
+near("manual resolution overrides the reported one",
+    hud.panels["glasses-1"].instance.x, 1920 / 2 - 190 - 4)
 
 -- Installer manifest -----------------------------------------------------------
 --

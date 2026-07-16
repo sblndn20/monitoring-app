@@ -70,6 +70,13 @@ function config.glassesDefaults()
         cycle = false,
         cycleInterval = 8,
         compact = false,
+
+        -- Take the viewport from the glasses_on signal, which reports the
+        -- player's real ScaledResolution. That is the space hud_click reports
+        -- clicks in, so matching it is what makes the HUD buttons hittable.
+        -- The manual values below are only used until the player wears the
+        -- glasses once, or when autoResolution is off.
+        autoResolution = true,
         scale = 3,          -- Minecraft GUI scale: 1 Small, 2 Normal, 3 Large, 4+ Auto
         resX = 2560,
         resY = 1440,
