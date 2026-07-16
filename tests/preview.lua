@@ -114,6 +114,11 @@ package.preload["serialization"] = function()
     return {serialize = tostring, unserialize = function() return nil end}
 end
 
+-- widgets.prompt blocks on event.pull; the preview only renders one frame.
+package.preload["event"] = function()
+    return {pull = function() return nil end, listen = function() end}
+end
+
 -- Scene ----------------------------------------------------------------------
 
 local graphics = require("lib.graphics.graphics")

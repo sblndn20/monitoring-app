@@ -34,16 +34,36 @@ local arPanel = require("ar.panel")
 local hud = {}
 hud.__index = hud
 
+-- component.list() is a component call, and the HUD refreshes at ~10 Hz for the
+-- bar animation. Rescanning every frame would be pure waste — glasses do not
+-- come and go between frames.
+local GLASSES_RESCAN_INTERVAL = 2
+
 function hud.new(config)
     return setmetatable({
         config = config,
         panels = {},
         cleared = {},
+        addresses = {},
+        addressesAt = nil,
         -- ScaledResolution reported by glasses_on, per glasses address. This is
         -- authoritative: it is the space hud_click coordinates arrive in, so the
         -- hit boxes only line up if the card is laid out in the same one.
         viewport = {},
     }, hud)
+end
+
+-- Attached glasses, cached between rescans.
+function hud:glassesList(now)
+    now = now or computer.uptime()
+    if self.addressesAt and (now - self.addressesAt) < GLASSES_RESCAN_INTERVAL then
+        return self.addresses
+    end
+    local list = {}
+    for address in component.list("glasses") do table.insert(list, address) end
+    table.sort(list)
+    self.addresses, self.addressesAt = list, now
+    return list
 end
 
 -- Resolution to lay the card out in.
@@ -118,7 +138,7 @@ function hud:update(monitor)
     local now = computer.uptime()
     local seen = {}
 
-    for address in component.list("glasses") do
+    for _, address in ipairs(self:glassesList(now)) do
         seen[address] = true
         local settings = configuration.glassesFor(self.config, address)
         local resolution = self:resolution(address, settings)
@@ -175,8 +195,7 @@ end
 -- it. getBindPlayers() may return a single name or a list depending on version,
 -- so both shapes are handled.
 function hud:glassesFor(user)
-    local addresses = {}
-    for address in component.list("glasses") do table.insert(addresses, address) end
+    local addresses = self:glassesList()
     if #addresses == 1 then return addresses[1] end
     if not user then return addresses[1] end
 

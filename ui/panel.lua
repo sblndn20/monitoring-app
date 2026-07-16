@@ -32,6 +32,23 @@ local SCALE_LABELS = {fast = "15 sec", medium = "10 min", slow = "60 min"}
 
 panel.SCALE_LABELS = SCALE_LABELS
 
+-- Eased bar position per view, so the fill glides instead of snapping between
+-- readings. Keyed by view id and kept here rather than on the view because a
+-- view is rebuilt from scratch on every poll.
+local displayed = {}
+
+local BAR_EASE = 0.3
+
+local function easeBar(id, target)
+    local current = displayed[id]
+    if current == nil then current = target end
+    current = current + (target - current) * BAR_EASE
+    -- Settle exactly, or it creeps forever on floating-point remainder.
+    if math.abs(target - current) < 0.0005 then current = target end
+    displayed[id] = current
+    return current
+end
+
 local function drawingY(row) return row * 2 - 1 end
 
 -- Charge colour tracks how alarming the level is, not the theme accent: a
@@ -74,7 +91,8 @@ function panel.draw(x, row, width, rows, view, theme, palette, graphScale)
     -- Charge bar ------------------------------------------------------------
     local barRow = row + 1
     if fraction then
-        widgets.bar(x, drawingY(barRow), width, 3, fraction, fill,
+        -- The percentage above shows the real reading; only the bar is eased.
+        widgets.bar(x, drawingY(barRow), width, 3, easeBar(view.id, fraction), fill,
             screen.blend(theme.panel, theme.background, 0.4))
     else
         -- A wireless network has no capacity, so there is nothing to fill.

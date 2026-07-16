@@ -46,6 +46,10 @@ local sources = require("core.sources")
 local app = require("ui.app")
 local arHud = require("ar")
 
+-- How often the loop wakes to animate. Component polling runs on its own,
+-- slower schedule (config.screen.pollInterval).
+local ANIMATION_INTERVAL = 0.1
+
 local function setupScreen(config)
     if not component.isAvailable("gpu") or not component.isAvailable("screen") then
         return false
@@ -91,17 +95,33 @@ local function run()
         config.screen.enabled = false
     end
 
-    while application.running do
-        monitor:update()
-        hud:update(monitor)
+    local lastPoll = -math.huge
+    local frame = 0
 
-        if config.screen.enabled then
-            application:draw()
+    while application.running do
+        local now = computer.uptime()
+
+        -- Reading every buffer is the expensive part, so it keeps its own slower
+        -- schedule. Animation must not be tied to it: when the two were the same
+        -- tick, the bar could only move at the poll rate and jumped between
+        -- readings instead of gliding.
+        if (now - lastPoll) >= (config.screen.pollInterval or 0.4) then
+            monitor:update()
+            lastPoll = now
         end
 
-        -- The timeout doubles as the poll interval: the loop wakes either when
-        -- the user touches the screen or when it is time to sample again.
-        local signal = {event.pull(config.screen.pollInterval or 0.25)}
+        -- Cheap: mutates glasses objects that already exist.
+        hud:update(monitor)
+
+        -- A full screen redraw is not cheap, so it runs at half the animation
+        -- rate — still smooth, at a fraction of the GPU calls.
+        if config.screen.enabled and (frame % 2 == 0 or application.dirty) then
+            application:draw()
+            application.dirty = false
+        end
+        frame = frame + 1
+
+        local signal = {event.pull(ANIMATION_INTERVAL)}
         local name = signal[1]
         if name == "touch" then
             application:onTouch(signal[3], signal[4])

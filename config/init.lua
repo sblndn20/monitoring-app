@@ -29,7 +29,10 @@ local function defaults()
             enabled = true,
             source = nil,          -- nil = aggregate
             graphScale = "medium", -- fast | medium | slow
-            pollInterval = 0.25,   -- seconds between component reads
+            -- Seconds between component reads. Independent of the redraw rate:
+            -- the UI animates at ~10 Hz regardless, so raising this costs
+            -- freshness, not smoothness.
+            pollInterval = 0.4,
         },
 
         -- AR HUD, keyed by glasses component address.

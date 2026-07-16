@@ -33,10 +33,18 @@ local MARGIN = 4
 -- to be the user's choice: chat occupies the bottom-left, the hotbar and health
 -- the bottom-centre, potion effects the top-right. top-left is the default
 -- because it is usually the emptiest.
+-- "manual" anchors at the origin, which makes offsetX/offsetY absolute
+-- coordinates rather than a nudge — for placing the card exactly.
 panel.ANCHORS = {
     "top-left", "top-center", "top-right",
     "bottom-left", "bottom-center", "bottom-right",
+    "manual",
 }
+
+-- How far the bar closes on its target each frame. At the ~10 Hz the HUD
+-- refreshes, this reaches the target in about a third of a second: quick enough
+-- to feel responsive, slow enough to read as movement rather than a jump.
+local BAR_EASE = 0.3
 
 local STATE_COLORS = {
     [states.ONLINE]  = palette.green,
@@ -60,6 +68,8 @@ local function anchorPosition(anchor, resolution, width)
         ["bottom-left"]   = {left, bottom},
         ["bottom-center"] = {center, bottom},
         ["bottom-right"]  = {right, bottom},
+        -- Origin, so the caller's offsets become absolute coordinates.
+        ["manual"]        = {0, 0},
     }
     local position = positions[anchor] or positions["top-left"]
     return position[1], position[2]
@@ -118,6 +128,9 @@ function panel.new(glasses, settings, theme, resolution)
     self.dynamic.name = ar.text(glasses, "", {x + 32, y + 4}, theme.muted, 0.7)
     self.dynamic.percent = ar.text(glasses, "", {x + width - 44, buttonY}, theme.primary, 1.0)
     self.dynamic.bar = ar.rectangle(glasses, {x + 8, barY}, 1, 4, theme.primary, 1.0)
+    -- A brighter cap on the leading edge. Without it the fill just stops dead
+    -- and the bar reads as clipped rather than as a level.
+    self.dynamic.head = ar.rectangle(glasses, {x + 8, barY}, 2, 4, palette.white, 0.85)
     self.dynamic.stored = ar.text(glasses, "", {x + 8, y + 21}, palette.text, 0.7)
     self.dynamic.rate = ar.text(glasses, "", {x + width - 60, y + 21}, palette.text, 0.7)
     self.dynamic.projection = ar.text(glasses, "", {x + 8, y + 28}, theme.muted, 0.6)
@@ -150,11 +163,36 @@ function panel:hitTest(x, y)
 end
 
 function panel:setBar(fraction, color)
-    local filled = math.max(1, self.barWidth * math.min(1, math.max(0, fraction or 0)))
+    local filled = self.barWidth * math.min(1, math.max(0, fraction or 0))
+
+    -- An empty buffer must render as empty. Clamping to a minimum width left a
+    -- permanent sliver at 0%, which looked like a rendering artefact.
+    if filled < 0.5 then
+        self.dynamic.bar.setAlpha(0)
+        self.dynamic.head.setAlpha(0)
+        return
+    end
+    self.dynamic.bar.setAlpha(1)
+
     -- ar.rectangle lays vertices out as TL, BL, BR, TR — so widening the bar
     -- means moving the two right-hand vertices only.
     self.dynamic.bar.setVertex(3, self.barX + filled, self.barY + 4)
     self.dynamic.bar.setVertex(4, self.barX + filled, self.barY)
+
+    -- Park the cap on the leading edge, and hide it once the bar is full so it
+    -- does not hang off the end of the track.
+    local headWidth = 2
+    if filled >= self.barWidth - headWidth then
+        self.dynamic.head.setAlpha(0)
+    else
+        self.dynamic.head.setAlpha(0.85)
+        local headX = self.barX + filled - headWidth
+        self.dynamic.head.setVertex(1, headX, self.barY)
+        self.dynamic.head.setVertex(2, headX, self.barY + 4)
+        self.dynamic.head.setVertex(3, headX + headWidth, self.barY + 4)
+        self.dynamic.head.setVertex(4, headX + headWidth, self.barY)
+    end
+
     if color ~= self.lastColor then
         self.dynamic.bar.setColor(screen.toRGB(color))
         self.dynamic.percent.setColor(screen.toRGB(color))
@@ -175,7 +213,15 @@ function panel:update(view, cycling)
     self.dynamic.name.setColor(screen.toRGB(cycling and self.theme.primary or self.theme.muted))
 
     self.dynamic.percent.setText(format.percent(fraction))
-    self:setBar(fraction or 0, color)
+
+    -- Glide toward the reading instead of snapping to it. The percentage text
+    -- still shows the real value — only the bar is smoothed.
+    local target = fraction or 0
+    if self.displayed == nil then self.displayed = target end
+    self.displayed = self.displayed + (target - self.displayed) * BAR_EASE
+    -- Settle exactly, or the bar creeps forever on floating-point remainder.
+    if math.abs(target - self.displayed) < 0.0005 then self.displayed = target end
+    self:setBar(self.displayed, color)
 
     -- Glasses text is small and the card is narrow, so exact digits do not fit;
     -- the compact form is the honest choice here.

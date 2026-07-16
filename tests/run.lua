@@ -77,6 +77,11 @@ package.preload["serialization"] = function()
     return {serialize = tostring, unserialize = function() return nil end}
 end
 
+-- widgets.prompt blocks on event.pull; nothing here exercises it interactively.
+package.preload["event"] = function()
+    return {pull = function() return nil end, listen = function() end}
+end
+
 -- Records every object created on it, so the AR panel can be inspected without
 -- a pair of glasses. Mirrors the OpenGlasses API surface EMON actually uses.
 local function fakeGlasses()
@@ -471,12 +476,36 @@ check("ar panel shows the rate", arInstance.dynamic.rate.text:find("1.2M") ~= ni
 -- The bar is a quad laid out TL, BL, BR, TR; a 50% fill moves vertices 3 and 4
 -- to the midpoint and leaves 1 and 2 pinned at the left edge.
 local bar = arInstance.dynamic.bar
+-- The first frame adopts the reading outright: easing up from zero on the very
+-- first draw would look like a loading animation, not a level.
 near("ar bar fills to the midpoint", bar.vertices[3][1], arInstance.barX + arInstance.barWidth * 0.5)
 eq("ar bar left edge stays put", bar.vertices[1][1], arInstance.barX)
 
+-- After that it glides. A single frame must NOT reach the new target — that
+-- snapping is exactly what made the bar look like it was jumping around.
 arView.percent = 1.0
 arInstance:update(arView)
-near("ar bar fills completely", bar.vertices[3][1], arInstance.barX + arInstance.barWidth)
+check("ar bar eases instead of jumping",
+    bar.vertices[3][1] < arInstance.barX + arInstance.barWidth)
+check("ar bar still moves toward the target",
+    bar.vertices[3][1] > arInstance.barX + arInstance.barWidth * 0.5)
+
+for _ = 1, 40 do arInstance:update(arView) end
+near("ar bar settles exactly on the target", bar.vertices[3][1],
+    arInstance.barX + arInstance.barWidth)
+-- The cap would otherwise hang off the end of the track.
+eq("the leading cap hides at full", arInstance.dynamic.head.alpha, 0)
+
+-- An empty buffer must read as empty. A minimum bar width left a permanent
+-- sliver at 0% that looked like a rendering artefact.
+arView.percent = 0
+for _ = 1, 60 do arInstance:update(arView) end
+eq("ar bar disappears at zero", bar.alpha, 0)
+
+arView.percent = 0.5
+for _ = 1, 60 do arInstance:update(arView) end
+eq("ar bar comes back above zero", bar.alpha, 1)
+check("the leading cap shows mid-bar", arInstance.dynamic.head.alpha > 0)
 
 -- A wireless view has no capacity, so the panel must not divide by it.
 local ok2 = pcall(function()
@@ -517,6 +546,19 @@ for _, anchor in ipairs(arPanel.ANCHORS) do
     check("anchor " .. anchor .. " stays within the viewport",
         px >= 0 and py >= 0 and px + cardWidth <= resolution[1] and py <= resolution[2])
 end
+
+-- "manual" anchors at the origin, which is what turns the offsets into exact
+-- coordinates instead of a nudge from a corner.
+local mx, my = arPanel.anchorPosition("manual", resolution, cardWidth)
+eq("manual anchors at the origin (x)", mx, 0)
+eq("manual anchors at the origin (y)", my, 0)
+
+local placed = configuration.glassesDefaults()
+placed.anchor = "manual"
+placed.offsetX, placed.offsetY = 300, 120
+local placedPanel = arPanel.new(fakeGlasses(), placed, theme, resolution)
+eq("manual position is used verbatim (x)", placedPanel.x, 300)
+eq("manual position is used verbatim (y)", placedPanel.y, 120)
 
 -- An unknown anchor (hand-edited config) must not crash or return nil.
 local fx, fy = arPanel.anchorPosition("nonsense", resolution, cardWidth)
@@ -641,6 +683,36 @@ glassesSettings.resX, glassesSettings.resY, glassesSettings.scale = 1920, 1080, 
 hud:update(monitor)
 near("manual resolution overrides the reported one",
     hud.panels["glasses-1"].instance.x, 1920 / 2 - 190 - 4)
+
+-- Custom names -----------------------------------------------------------------
+--
+-- A name the user typed must outrank the machine's own everywhere, and must
+-- survive a rescan — otherwise "Rescan components" would quietly undo it.
+
+local named = {buffers = {{address = "a1", name = "Main bank", kind = "lsc", enabled = true}}}
+configuration.syncBuffers(named, {{address = "a1", name = "Lapotronic Super Capacitor", kind = "lsc"}})
+eq("a rescan keeps the custom name", named.buffers[1].name, "Main bank")
+eq("a rescan records the machine's own name separately",
+    named.buffers[1].detectedName, "Lapotronic Super Capacitor")
+eq("a rescan does not duplicate the entry", #named.buffers, 1)
+
+-- A newly discovered buffer adopts the machine's name until renamed.
+configuration.syncBuffers(named, {{address = "a2", name = "Battery Buffer", kind = "batterybuffer"}})
+eq("a new buffer is added", #named.buffers, 2)
+eq("a new buffer takes the machine's name", named.buffers[2].name, "Battery Buffer")
+
+-- The custom name is what reaches the renderers.
+fakeComponents["named-lsc"] = proxy(lscSensor())
+fakeTypes["named-lsc"] = "gt_machine"
+local namedMonitor = monitorLib.new({
+    buffers = {{address = "named-lsc", name = "Reactor bank", kind = "lsc", enabled = true}},
+})
+clock = 500
+namedMonitor:update()
+eq("the custom name reaches the view", namedMonitor:get("named-lsc").name, "Reactor bank")
+-- Including the wireless view hanging off it.
+eq("the custom name reaches the wireless view",
+    namedMonitor:get("named-lsc:wireless").name, "Reactor bank · Wireless")
 
 -- Installer manifest -----------------------------------------------------------
 --

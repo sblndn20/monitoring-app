@@ -8,10 +8,52 @@
 -- reports in a `touch` signal. Drawing uses graphics.lua's doubled-height space,
 -- where drawing row y maps to terminal row ceil(y/2).
 
+local event = require("event")
+
 local graphics = require("lib.graphics.graphics")
 local text = require("lib.utils.text")
 
 local widgets = {}
+
+-- LWJGL scan codes, as delivered by OpenComputers' key_down signal.
+local KEY_ESCAPE, KEY_BACKSPACE, KEY_ENTER, KEY_NUMPAD_ENTER = 1, 14, 28, 156
+
+-- Modal single-line input. Blocks until Enter (returns the text) or Escape
+-- (returns nil).
+--
+-- Blocking is deliberate. The alternative — threading edit state through the
+-- main loop — buys nothing here: the loop only polls components and redraws,
+-- and pausing both for the seconds it takes to type a name is unnoticeable.
+-- A keyboard attached to the screen is required, which is the same thing that
+-- makes the rest of the UI usable.
+function widgets.prompt(x, row, width, initial, colors, numeric)
+    local value = tostring(initial or "")
+
+    local function render()
+        -- The trailing block is the caret; fit() keeps a long value from
+        -- spilling past the field.
+        graphics.text(x, row, text.fit("> " .. value .. "▏", width), colors.primary, true)
+    end
+    render()
+
+    while true do
+        local _, _, char, code = event.pull("key_down")
+        if code == KEY_ENTER or code == KEY_NUMPAD_ENTER then
+            return value
+        elseif code == KEY_ESCAPE then
+            return nil
+        elseif code == KEY_BACKSPACE then
+            value = text.sub(value, 1, math.max(0, text.len(value) - 1))
+        elseif char and char >= 32 then
+            local typed = text.char(char)
+            -- A numeric field still has to accept a leading minus.
+            if not numeric or typed:match("[%d%-]") then
+                if text.len(value) < width - 4 then value = value .. typed end
+            end
+        end
+        render()
+    end
+end
 
 local regions = {}
 

@@ -62,7 +62,7 @@ Computronics `1.9.3-GTNH`).
 
 ```shell
 cd /home
-wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.2/setup.lua && setup
+wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.3.0/setup.lua && setup
 ```
 
 Установщик сам переберёт зеркала, скачает файлы в `/home/EMON` и предложит включить
@@ -76,7 +76,7 @@ wget -f https://cdn.jsdelivr.net/gh/sblndn20/monitoring-app@v1.2.2/setup.lua && 
 Через `raw.githubusercontent.com` — если он у вас доступен из игры (см. ниже):
 
 ```shell
-wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.2.2/setup.lua && setup
+wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.3.0/setup.lua && setup
 ```
 
 Полезные ключи:
@@ -84,7 +84,7 @@ wget -f https://raw.githubusercontent.com/sblndn20/monitoring-app/v1.2.2/setup.l
 ```shell
 setup --repo=user/repo                 # ставить из форка
 setup --mirror=raw                     # заставить конкретное зеркало
-setup --branch=v1.2.2                  # конкретный тег
+setup --branch=v1.3.0                  # конкретный тег
 setup --branch=<commit-sha>            # точная ревизия
 setup --branch=main                    # неопубликованный код (см. предупреждение выше)
 ```
@@ -164,14 +164,38 @@ function require(module)
 | Страница | Что делает |
 |---|---|
 | **Dashboard** | Панель энергии выбранного источника. |
-| **Buffers** | Клик по строке — показать этот буфер на экране. Кнопка `on/off` — включить/выключить опрос буфера. `Rescan components` — перечитать компоненты. |
-| **Glasses** | Для каждых очков: `on/off`, режим `pinned` (закреплённый источник) или `cycle` (перебор), и выбор источника. |
+| **Buffers** | Клик по строке — показать этот буфер на экране. `rename` — задать своё имя. `on/off` — включить/выключить опрос. `Rescan components` — перечитать компоненты. |
+| **Glasses** | Настройки AR-панели для выбранной пары очков: источник, положение, размер. |
 | **Graph** | Переключает шкалу графика. |
 | **Save** | Сохраняет настройки в `/home/EMON/settings/config`. |
 
 Настройки **не** сохраняются автоматически — жмите `Save`.
 
 Выход — кнопка `Quit` или `Ctrl+C`.
+
+### Свои имена буферов
+
+На странице **Buffers** кнопка `rename` рядом с буфером — вводите имя, `Enter` подтверждает,
+`Esc` отменяет. Имя используется **везде**: заголовок на мониторе, список, AR-панель,
+подпись беспроводной сети (`Моё имя · Wireless`).
+
+Имя переживает `Rescan components`: приложение хранит его отдельно от того, как машина
+называет себя сама. Пустое имя возвращает исходное название машины.
+
+### Положение AR-панели
+
+На странице **Glasses**, строка `Position`:
+
+- **Шесть углов** — `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`,
+  `bottom-right`. Панель прижимается к выбранному углу, а `X`/`Y` смещают её оттуда.
+- **`manual`** — `X`/`Y` становятся **точными координатами** в системе координат очков,
+  левый верхний угол = `0, 0`.
+
+Задать числа можно двумя способами: стрелками `← → ↑ ↓` по 4 пикселя, либо кликнуть по
+кнопке `X` / `Y` и **ввести значение с клавиатуры**.
+
+Размер области очков виден в строке `Card` (`detected 640x360`) — от него и считайте
+координаты для `manual`.
 
 ### Переключение источника прямо из очков
 

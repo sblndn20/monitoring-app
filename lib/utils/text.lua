@@ -17,6 +17,7 @@ if ok and type(unicode) == "table" and unicode.len then
     text.len = unicode.len
     text.sub = unicode.sub
     text.upper = unicode.upper
+    text.char = unicode.char
 else
     text.len = function(s)
         if utf8 and utf8.len then return utf8.len(s) or #s end
@@ -34,6 +35,10 @@ else
         return s:sub(from, to and (to - 1) or #s)
     end
     text.upper = string.upper
+    text.char = function(code)
+        if utf8 and utf8.char then return utf8.char(code) end
+        return string.char(code)
+    end
 end
 
 -- Pad to `width` characters, truncating with an ellipsis when too long.

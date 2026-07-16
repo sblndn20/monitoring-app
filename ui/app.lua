@@ -86,7 +86,8 @@ end
 
 function app:drawBuffers(width, rows, theme)
     graphics.text(2, 1, "Buffers", theme.primary, true)
-    graphics.text(10, 1, "· click to show on screen, [on/off] to monitor", theme.muted, true)
+    graphics.text(10, 1, "· click a row to show it on screen · rename to name it yourself",
+        theme.muted, true)
     panel.rule(2, 2, width - 2, theme)
 
     local row = 4
@@ -96,6 +97,24 @@ function app:drawBuffers(width, rows, theme)
     local function toggle(entry)
         return function()
             entry.enabled = not (entry.enabled ~= false)
+            self.dirty = true
+        end
+    end
+
+    -- A custom name replaces the machine's own everywhere: the dashboard header,
+    -- the AR card, this list. sources.read prefers entry.name, and syncBuffers
+    -- only ever refreshes detectedName, so a rescan cannot clobber it.
+    local function rename(entry)
+        return function()
+            local typed = widgets.prompt(2, rows - 2, 40,
+                entry.name or entry.detectedName or "", theme)
+            if typed then
+                typed = typed:gsub("^%s+", ""):gsub("%s+$", "")
+                -- An empty name falls back to what the machine reports rather
+                -- than leaving a nameless row.
+                entry.name = (typed ~= "") and typed or entry.detectedName
+                self:notify("Renamed — press Save to keep it")
+            end
             self.dirty = true
         end
     end
@@ -121,12 +140,13 @@ function app:drawBuffers(width, rows, theme)
             end
         end
 
-        widgets.listItem(2, row, width - 14, caption, theme, isSelected, function()
+        widgets.listItem(2, row, width - 24, caption, theme, isSelected, function()
             self.config.screen.source = isAggregate and nil or view.id
             self.dirty = true
         end, nil, entry and entry.enabled)
 
         if entry then
+            widgets.button(width - 22, row, "rename", theme, rename(entry), nil, false)
             widgets.button(width - 11, row, " on", theme, toggle(entry), nil, true)
         end
         row = row + 1
@@ -137,9 +157,10 @@ function app:drawBuffers(width, rows, theme)
     -- what makes switching one back on possible at all.
     for _, entry in ipairs(self.config.buffers) do
         if entry.enabled == false and row <= rows - 4 then
-            widgets.listItem(2, row, width - 14,
+            widgets.listItem(2, row, width - 24,
                 text.fit(entry.name or entry.address, 28) .. "   not monitored",
                 theme, false, toggle(entry), nil, false)
+            widgets.button(width - 22, row, "rename", theme, rename(entry), nil, false)
             widgets.button(width - 11, row, "off", theme, toggle(entry), nil, false)
             row = row + 1
         end
@@ -263,16 +284,21 @@ function app:drawGlasses(width, rows, theme)
     row = row + 1
 
     -- Position ---------------------------------------------------------------
+    local manual = settings.anchor == "manual"
+
     label("Position")
     x = 14
     x = x + widgets.button(x, row, settings.anchor, theme, function()
         settings.anchor = cycleValue(arPanel.ANCHORS, settings.anchor)
         self.dirty = true
     end, nil, true) + 2
-    graphics.text(x, row, "← chat sits bottom-left, hotbar bottom-centre", theme.muted, true)
+    graphics.text(x, row, manual and "← X/Y are exact coordinates in the glasses viewport"
+        or "← chat sits bottom-left, hotbar bottom-centre", theme.muted, true)
     row = row + 1
 
-    label("Nudge")
+    -- With a corner anchor these nudge the card away from it; with "manual"
+    -- they ARE the position, so the same two numbers serve both.
+    label(manual and "X / Y" or "Nudge")
     x = 14
     local function nudge(dx, dy)
         return function()
@@ -289,8 +315,21 @@ function app:drawGlasses(width, rows, theme)
         settings.offsetX, settings.offsetY = 0, 0
         self.dirty = true
     end, nil, false) + 2
-    graphics.text(x, row, string.format("(%+d, %+d) px", settings.offsetX or 0, settings.offsetY or 0),
-        theme.muted, true)
+
+    -- Typing beats nudging four pixels at a time when you know the number.
+    local function typeCoordinate(axis)
+        return function()
+            local typed = widgets.prompt(2, rows - 2, 20, settings[axis] or 0, theme, true)
+            local number = tonumber(typed)
+            if number then settings[axis] = math.floor(number) end
+            self.dirty = true
+        end
+    end
+    x = x + widgets.button(x, row, "X " .. (settings.offsetX or 0), theme,
+        typeCoordinate("offsetX"), nil, false) + 1
+    x = x + widgets.button(x, row, "Y " .. (settings.offsetY or 0), theme,
+        typeCoordinate("offsetY"), nil, false) + 2
+    graphics.text(x, row, "click X/Y to type exact values", theme.muted, true)
     row = row + 1
 
     -- Rendering --------------------------------------------------------------
