@@ -28,20 +28,48 @@ local GETTERS = {
     "getStoredEUString", "getEUCapacityString", "getName", "isWorkAllowed", "hasWork",
 }
 
-local candidates = {}
+-- Every component first, unfiltered. If EMON sees no buffers, the answer is
+-- almost always here: either the machine's component never appeared at all
+-- (adapter not touching the controller), or it appeared under a type EMON does
+-- not recognise. Filtering this list would hide exactly the case being debugged.
+local all, total = {}, 0
 for address, componentType in component.list() do
-    if componentType:find("^gt_") or componentType == "energy_storage" then
-        table.insert(candidates, {address = address, type = componentType})
+    total = total + 1
+    table.insert(all, {address = address, type = componentType})
+end
+table.sort(all, function(a, b) return a.type < b.type end)
+
+print("EMON sensor dump")
+line("=")
+print("All components visible to this computer (" .. total .. "):")
+for _, item in ipairs(all) do
+    print(string.format("  %-22s %s", item.type, item.address))
+end
+
+local candidates = {}
+for _, item in ipairs(all) do
+    if item.type:find("^gt_") or item.type == "energy_storage" then
+        table.insert(candidates, item)
     end
 end
 
 if #candidates == 0 then
-    print("No GregTech or IC2 energy components found.")
-    print("Place an Adapter block against the machine and link it to this computer.")
+    line("=")
+    print("No GregTech or IC2 energy components among them.")
+    print("")
+    print("If the list above has no gt_* entry, the machine is not exposed at all:")
+    print("  * the Adapter must touch the multiblock's CONTROLLER block,")
+    print("    not a casing, capacitor or hatch;")
+    print("  * the Adapter must be connected to this computer (adjacent or cabled);")
+    print("  * an MFU inside the Adapter can link a controller up to 16 blocks away.")
+    print("")
+    print("If you DO see an unfamiliar type above, report it — EMON may just need")
+    print("an adapter for it.")
     return
 end
 
-print("EMON sensor dump — " .. #candidates .. " component(s)")
+line("=")
+print("Energy candidates: " .. #candidates)
 
 for _, candidate in ipairs(candidates) do
     line("=")

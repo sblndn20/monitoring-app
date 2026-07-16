@@ -77,8 +77,15 @@ function app:drawBuffers(width, rows, theme)
     local views = self.monitor:list()
     local selected = self.config.screen.source
 
+    local function toggle(entry)
+        return function()
+            entry.enabled = not (entry.enabled ~= false)
+            self.dirty = true
+        end
+    end
+
     for _, view in ipairs(views) do
-        if row > rows - 3 then break end
+        if row > rows - 4 then break end
 
         local isAggregate = view.id == monitorLib.AGGREGATE_ID
         local isSelected = (selected == view.id) or (selected == nil and isAggregate)
@@ -104,21 +111,40 @@ function app:drawBuffers(width, rows, theme)
         end, nil, entry and entry.enabled)
 
         if entry then
-            widgets.button(width - 11, row, entry.enabled ~= false and " on" or "off",
-                theme, function()
-                    entry.enabled = not (entry.enabled ~= false)
-                    self.dirty = true
-                end, nil, entry.enabled ~= false)
+            widgets.button(width - 11, row, " on", theme, toggle(entry), nil, true)
         end
         row = row + 1
     end
 
+    -- Disabled buffers are not polled, so the monitor builds no view for them
+    -- and the loop above cannot show them. Listing them from the config too is
+    -- what makes switching one back on possible at all.
+    for _, entry in ipairs(self.config.buffers) do
+        if entry.enabled == false and row <= rows - 4 then
+            widgets.listItem(2, row, width - 14,
+                text.fit(entry.name or entry.address, 28) .. "   not monitored",
+                theme, false, toggle(entry), nil, false)
+            widgets.button(width - 11, row, "off", theme, toggle(entry), nil, false)
+            row = row + 1
+        end
+    end
+
     row = row + 1
     widgets.button(2, row, "Rescan components", theme, function()
-        configuration.syncBuffers(self.config, sources.discover())
-        self:notify("Rescanned")
+        local found = sources.discover()
+        configuration.syncBuffers(self.config, found)
+        self:notify(#found .. " component(s) found")
         self.dirty = true
     end, nil, true)
+
+    if #self.config.buffers == 0 then
+        graphics.text(2, row + 2, "Nothing detected. The Adapter must touch the multiblock's",
+            theme.muted, true)
+        graphics.text(2, row + 3, "CONTROLLER block and be connected to this computer.",
+            theme.muted, true)
+        graphics.text(2, row + 4, "Run tools/sensordump.lua to see every component.",
+            theme.muted, true)
+    end
 end
 
 function app:drawGlasses(width, rows, theme)
