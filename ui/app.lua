@@ -316,8 +316,13 @@ function app:drawGlasses(width, rows, theme)
     end
     row = row + 2
 
-    graphics.text(2, row, "In-game: bind Controls → openGlasses → \"Free Cursor (Toggle)\" (unbound", theme.muted, true)
-    graphics.text(2, row + 1, "by default), then click ‹ › on the HUD, or press ← → / 1-9 / C.", theme.muted, true)
+    -- The category shows up as "OC Glasses"; openGlasses is only the lang key.
+    -- Both bindings ship unbound, which is the single most common reason the HUD
+    -- looks unresponsive.
+    graphics.text(2, row, "In-game: Controls → \"OC Glasses\" → bind \"Free Cursor (Toggle)\".",
+        theme.muted, true)
+    graphics.text(2, row + 1, "It is UNBOUND by default. Then: ← → switch, 1-9 pick, C cycles.",
+        theme.muted, true)
     row = row + 3
     graphics.text(2, row, "Changes apply instantly. Press Save to keep them.", theme.muted, true)
 end
